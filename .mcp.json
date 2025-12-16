@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "rust-lang-mcp": {
+      "command": "cargo",
+      "args": ["run", "--release"],
+      "cwd": "/home/tauan/Documents/dev/rust/rust-lang-mcp"
+    }
+  }
+}
