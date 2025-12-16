@@ -65,7 +65,7 @@ Add to `~/.config/claude/claude_desktop_config.json` (Linux) or `~/Library/Appli
 
 #### Global configuration (recommended)
 
-Add to `~/.claude/settings.json` to make the MCP available in all projects:
+Add to `~/.claude.json` to make the MCP available in all projects:
 
 ```json
 {
@@ -77,9 +77,11 @@ Add to `~/.claude/settings.json` to make the MCP available in all projects:
 }
 ```
 
+> **Note:** Add the `mcpServers` key at the top level of the existing `~/.claude.json` file (don't replace the whole file).
+
 #### Project-level configuration
 
-For development or project-specific setup, create a `.mcp.json` file in the project root:
+For project-specific setup, create a `.mcp.json` file in the project root:
 
 ```json
 {
@@ -94,6 +96,8 @@ For development or project-specific setup, create a `.mcp.json` file in the proj
 ```
 
 This runs the MCP server directly from source, useful during development.
+
+> **Note:** You can check your MCP config locations by running `/mcp` in Claude Code. User-level config is at `~/.claude.json`, project-level at `.mcp.json`.
 
 ### Cursor
 
