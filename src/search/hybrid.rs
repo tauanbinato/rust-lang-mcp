@@ -52,10 +52,23 @@ impl<'a> HybridSearch<'a> {
         // Filter semantic results by source if specified
         if let Some(sources) = sources {
             semantic_results.retain(|(path, _)| {
-                // Look up the source for this path from keyword results
-                keyword_results
+                // First check if it's in keyword results
+                if keyword_results
                     .iter()
                     .any(|r| r.path == *path && sources.contains(&r.source.as_str()))
+                {
+                    return true;
+                }
+
+                // Otherwise, look up the source by querying for the exact path
+                // This handles cases where semantic search finds documents that keyword search missed
+                if let Ok(path_results) = self.keyword_index.search(path, 1) {
+                    if let Some(result) = path_results.first() {
+                        return result.path == *path && sources.contains(&result.source.as_str());
+                    }
+                }
+
+                false
             });
         }
 

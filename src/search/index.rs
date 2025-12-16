@@ -2,7 +2,7 @@ use std::path::Path;
 
 use tantivy::collector::TopDocs;
 use tantivy::query::QueryParser;
-use tantivy::schema::{Schema, Value, STORED, TEXT};
+use tantivy::schema::{Schema, Value, STORED, STRING, TEXT};
 use tantivy::{doc, Index, IndexWriter, TantivyDocument};
 
 use crate::error::Result;
@@ -52,7 +52,7 @@ impl SearchIndex {
         schema_builder.add_text_field("title", TEXT | STORED);
         schema_builder.add_text_field("content", TEXT | STORED);
         schema_builder.add_text_field("path", STORED);
-        schema_builder.add_text_field("source", STORED);
+        schema_builder.add_text_field("source", STRING | STORED);
         schema_builder.build()
     }
 
