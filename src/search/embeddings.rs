@@ -2,8 +2,6 @@
 //!
 //! Uses all-MiniLM-L6-v2 model for generating 384-dimensional embeddings.
 
-#![allow(dead_code)]
-
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -210,6 +208,7 @@ impl EmbeddingModel {
     }
 
     /// Get the embedding dimension
+    #[allow(dead_code)]
     pub fn dimension(&self) -> usize {
         EMBEDDING_DIM
     }
@@ -250,6 +249,7 @@ pub fn embed_texts(texts: &[&str]) -> Result<Vec<Vec<f32>>> {
 }
 
 /// Get the embedding dimension
+#[allow(dead_code)]
 pub fn embedding_dimension() -> usize {
     EMBEDDING_DIM
 }

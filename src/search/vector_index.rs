@@ -1,7 +1,5 @@
 //! Vector index for semantic search using HNSW (Hierarchical Navigable Small World).
 
-#![allow(dead_code)]
-
 use std::path::Path;
 
 use hnsw_rs::hnsw::Hnsw;
@@ -52,6 +50,7 @@ impl VectorIndex {
     }
 
     /// Add multiple documents to the index
+    #[allow(dead_code)]
     pub fn add_batch(&mut self, documents: Vec<(String, Vec<f32>)>) {
         let start_id = self.id_to_path.len();
 
@@ -94,6 +93,7 @@ impl VectorIndex {
     }
 
     /// Get the number of documents in the index
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.id_to_path.len()
     }

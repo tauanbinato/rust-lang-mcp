@@ -7,6 +7,8 @@ use crate::search::{SearchIndex, VectorIndex};
 use crate::sources::{DocSource, DOC_SOURCES};
 
 /// Index all available documentation sources (keyword index only)
+/// Note: Use `index_all_sources_hybrid` for full hybrid search support.
+#[allow(dead_code)]
 pub fn index_all_sources(index: &SearchIndex, data_dir: &Path) -> Result<usize> {
     let all_documents = collect_all_documents(data_dir)?;
 
@@ -23,7 +25,6 @@ pub fn index_all_sources(index: &SearchIndex, data_dir: &Path) -> Result<usize> 
 }
 
 /// Index all sources with both keyword and vector indices (hybrid search)
-#[allow(dead_code)]
 pub fn index_all_sources_hybrid(
     keyword_index: &SearchIndex,
     vector_index: &mut VectorIndex,

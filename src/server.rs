@@ -48,8 +48,8 @@ impl RustDocServer {
         let index_path = data_dir.join("index");
         let vector_index_path = index_path.join("vectors");
 
-        let keyword_index = Arc::new(SearchIndex::open_or_create(&index_path)?);
-        let vector_index = Arc::new(VectorIndex::open_or_create(&vector_index_path)?);
+        let keyword_index = SearchIndex::open_or_create(&index_path)?;
+        let mut vector_index = VectorIndex::open_or_create(&vector_index_path)?;
 
         // Index documents if the keyword index is empty
         if keyword_index.is_empty()? {
@@ -68,16 +68,16 @@ impl RustDocServer {
                 }
             }
 
-            // Use keyword-only indexing for now (embeddings will be generated on first semantic query)
-            let count = indexer::index_all_sources(&keyword_index, &data_dir)?;
+            // Index with both keyword and vector indices for hybrid search
+            let count = indexer::index_all_sources_hybrid(&keyword_index, &mut vector_index, &data_dir)?;
             if count > 0 {
-                tracing::info!("Keyword indexing complete: {} documents indexed", count);
+                tracing::info!("Hybrid indexing complete: {} documents indexed", count);
             } else {
                 tracing::warn!("No documentation sources found. Check network connection and try again.");
             }
         }
 
-        // Initialize embedding model if vector index has data (for semantic/hybrid search)
+        // Initialize embedding model for semantic/hybrid search
         if !vector_index.is_empty() {
             let models_dir = data_dir.join("models");
             if let Err(e) = init_embedding_model(&models_dir) {
@@ -86,8 +86,8 @@ impl RustDocServer {
         }
 
         Ok(Self {
-            keyword_index,
-            vector_index,
+            keyword_index: Arc::new(keyword_index),
+            vector_index: Arc::new(vector_index),
             data_dir,
         })
     }
