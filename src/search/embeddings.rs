@@ -87,7 +87,7 @@ impl EmbeddingModel {
             .call()
             .map_err(|e| Error::Other(format!("Failed to download {}: {}", url, e)))?;
 
-        let mut reader = response.into_reader();
+        let mut reader = response.into_body().into_reader();
         let mut file = std::fs::File::create(dest)?;
         std::io::copy(&mut reader, &mut file)?;
 

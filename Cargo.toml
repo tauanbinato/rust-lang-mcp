@@ -2,31 +2,37 @@
 name = "rust-lang-mcp"
 version = "0.1.0"
 edition = "2024"
+authors = ["Tauan Binato <tauanbinato@users.noreply.github.com>"]
+license = "MIT"
+description = "MCP server providing AI assistants with access to Rust documentation via hybrid search"
+repository = "https://github.com/tauanbinato/rust-lang-mcp"
+keywords = ["mcp", "rust", "documentation", "search", "ai"]
+categories = ["development-tools", "text-processing"]
 
 [dependencies]
 # MCP SDK
-rmcp = { version = "0.1", features = ["server", "transport-io", "macros"] }
+rmcp = { version = "0.11.0", features = ["server", "transport-io", "macros"] }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 
 # Search
-tantivy = "0.22"
+tantivy = "0.25"
 
 # Semantic search / embeddings
 ort = "2.0.0-rc.10"
-tokenizers = "0.21"
-ndarray = "0.16"
+tokenizers = "0.22.2"
+ndarray = "0.16"  # Must match ort's requirement
 hnsw_rs = "0.3"
 
 # HTTP client for model download
-ureq = "2"
+ureq = "3.1.4"
 
 # Git operations for auto-cloning docs
-git2 = "0.19"
+git2 = "0.20.3"
 
 # Markdown parsing
-pulldown-cmark = "0.12"
+pulldown-cmark = "0.13"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }

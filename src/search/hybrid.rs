@@ -62,11 +62,10 @@ impl<'a> HybridSearch<'a> {
 
                 // Otherwise, look up the source by querying for the exact path
                 // This handles cases where semantic search finds documents that keyword search missed
-                if let Ok(path_results) = self.keyword_index.search(path, 1) {
-                    if let Some(result) = path_results.first() {
+                if let Ok(path_results) = self.keyword_index.search(path, 1)
+                    && let Some(result) = path_results.first() {
                         return result.path == *path && sources.contains(&result.source.as_str());
                     }
-                }
 
                 false
             });

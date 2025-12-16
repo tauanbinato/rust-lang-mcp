@@ -1,17 +1,19 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use rmcp::handler::server::tool::{ToolBox, ToolBoxItem, ToolCallContext};
-use rmcp::model::{
-    CallToolRequestParam, CallToolResult, Implementation, ListToolsResult, PaginatedRequestParam,
-    ServerCapabilities, ServerInfo, ToolsCapability,
+use rmcp::{
+    ServerHandler,
+    handler::server::{router::tool::ToolRouter, wrapper::Parameters},
+    model::{CallToolResult, Content, ServerCapabilities, ServerInfo},
+    tool, tool_handler, tool_router,
+    ErrorData as McpError,
 };
 use rmcp::schemars::{self, JsonSchema};
-use rmcp::service::{RequestContext, RoleServer};
-use rmcp::{serve_server, transport::io::stdio, Error as McpError, ServerHandler};
+use rmcp::service::ServiceExt;
+use rmcp::transport::io::stdio;
 use serde::Deserialize;
 
-use crate::error::Result;
+use crate::error::Result as CrateResult;
 use crate::indexer;
 use crate::search::embeddings::init_embedding_model;
 use crate::search::{HybridSearch, SearchIndex, SearchMode, VectorIndex};
@@ -73,12 +75,13 @@ fn default_explain_limit() -> usize {
 pub struct RustDocServer {
     keyword_index: Arc<SearchIndex>,
     vector_index: Arc<VectorIndex>,
+    tool_router: ToolRouter<Self>,
     #[allow(dead_code)]
     data_dir: PathBuf,
 }
 
 impl RustDocServer {
-    pub async fn new(data_dir: PathBuf) -> Result<Self> {
+    pub async fn new(data_dir: PathBuf) -> CrateResult<Self> {
         let index_path = data_dir.join("index");
         let vector_index_path = index_path.join("vectors");
 
@@ -122,41 +125,29 @@ impl RustDocServer {
         Ok(Self {
             keyword_index: Arc::new(keyword_index),
             vector_index: Arc::new(vector_index),
+            tool_router: Self::tool_router(),
             data_dir,
         })
     }
 
-    pub async fn run(self) -> Result<()> {
+    pub async fn run(self) -> anyhow::Result<()> {
         tracing::info!("Starting rust-lang-mcp server on stdio");
-        let transport = stdio();
-        let _service = serve_server(self, transport).await?;
-        // Keep running until terminated
-        tokio::signal::ctrl_c().await.ok();
+        let service = self.serve(stdio()).await?;
+        service.waiting().await?;
         Ok(())
     }
+}
 
-    // Tool definition for search_rust_docs
-    fn search_rust_docs_tool_attr() -> rmcp::model::Tool {
-        use rmcp::handler::server::tool::cached_schema_for_type;
-        rmcp::model::Tool {
-            name: "search_rust_docs".into(),
-            description: "Search the indexed Rust documentation (The Rust Book, Rust Reference, etc.) for information about Rust concepts, syntax, and best practices. Uses hybrid search (keyword + semantic) by default for best results.".into(),
-            input_schema: cached_schema_for_type::<SearchDocsParams>(),
-        }
-    }
-
-    async fn search_rust_docs_tool_call(
-        context: ToolCallContext<'_, Self>,
+#[tool_router]
+impl RustDocServer {
+    #[tool(
+        name = "search_rust_docs",
+        description = "Search the indexed Rust documentation (The Rust Book, Rust Reference, etc.) for information about Rust concepts, syntax, and best practices. Uses hybrid search (keyword + semantic) by default for best results."
+    )]
+    async fn search_rust_docs(
+        &self,
+        Parameters(params): Parameters<SearchDocsParams>,
     ) -> std::result::Result<CallToolResult, McpError> {
-        use rmcp::handler::server::tool::FromToolCallContextPart;
-        use rmcp::handler::server::tool::Parameters;
-        use rmcp::model::Content;
-
-        let (callee, context) =
-            <&Self as FromToolCallContextPart<'_, Self>>::from_tool_call_context_part(context)?;
-        let (Parameters(params), _context) =
-            <Parameters<SearchDocsParams> as FromToolCallContextPart<'_, Self>>::from_tool_call_context_part(context)?;
-
         let limit = if params.limit == 0 {
             5
         } else {
@@ -171,10 +162,10 @@ impl RustDocServer {
             .unwrap_or_default();
 
         // Check if we can do semantic/hybrid search
-        let can_semantic = !callee.vector_index.is_empty();
+        let can_semantic = !self.vector_index.is_empty();
 
         let results = if can_semantic {
-            let hybrid = HybridSearch::new(&callee.keyword_index, &callee.vector_index);
+            let hybrid = HybridSearch::new(&self.keyword_index, &self.vector_index);
             match mode {
                 SearchMode::Hybrid => hybrid.search(&params.query, limit),
                 SearchMode::Keyword => hybrid.keyword_search(&params.query, limit),
@@ -185,7 +176,7 @@ impl RustDocServer {
             if !matches!(mode, SearchMode::Keyword) {
                 tracing::debug!("Vector index empty, falling back to keyword search");
             }
-            callee.keyword_index.search(&params.query, limit)
+            self.keyword_index.search(&params.query, limit)
         };
 
         match results {
@@ -224,38 +215,24 @@ impl RustDocServer {
         }
     }
 
-    // Tool definition for explain_concept
-    fn explain_concept_tool_attr() -> rmcp::model::Tool {
-        use rmcp::handler::server::tool::cached_schema_for_type;
-        rmcp::model::Tool {
-            name: "explain_concept".into(),
-            description: "Get a detailed explanation of a Rust concept. Searches The Rust Book and Rust Reference for comprehensive explanations of concepts like ownership, lifetimes, traits, borrowing, etc.".into(),
-            input_schema: cached_schema_for_type::<ExplainConceptParams>(),
-        }
-    }
-
-    async fn explain_concept_tool_call(
-        context: ToolCallContext<'_, Self>,
+    #[tool(
+        name = "explain_concept",
+        description = "Get a detailed explanation of a Rust concept. Searches The Rust Book and Rust Reference for comprehensive explanations of concepts like ownership, lifetimes, traits, borrowing, etc."
+    )]
+    async fn explain_concept(
+        &self,
+        Parameters(params): Parameters<ExplainConceptParams>,
     ) -> std::result::Result<CallToolResult, McpError> {
-        use rmcp::handler::server::tool::FromToolCallContextPart;
-        use rmcp::handler::server::tool::Parameters;
-        use rmcp::model::Content;
-
-        let (callee, context) =
-            <&Self as FromToolCallContextPart<'_, Self>>::from_tool_call_context_part(context)?;
-        let (Parameters(params), _context) =
-            <Parameters<ExplainConceptParams> as FromToolCallContextPart<'_, Self>>::from_tool_call_context_part(context)?;
-
         let limit = if params.limit == 0 { 3 } else { params.limit.min(10) };
 
         // Search primarily in rust-book and rust-reference
         let sources = ["rust-book", "rust-reference"];
-        let hybrid = HybridSearch::new(&callee.keyword_index, &callee.vector_index);
+        let hybrid = HybridSearch::new(&self.keyword_index, &self.vector_index);
 
-        let results = if !callee.vector_index.is_empty() {
+        let results = if !self.vector_index.is_empty() {
             hybrid.search_with_sources(&params.concept, limit, Some(&sources))
         } else {
-            callee.keyword_index.search_with_sources(&params.concept, limit, Some(&sources))
+            self.keyword_index.search_with_sources(&params.concept, limit, Some(&sources))
         };
 
         match results {
@@ -292,38 +269,24 @@ impl RustDocServer {
         }
     }
 
-    // Tool definition for get_best_practice
-    fn get_best_practice_tool_attr() -> rmcp::model::Tool {
-        use rmcp::handler::server::tool::cached_schema_for_type;
-        rmcp::model::Tool {
-            name: "get_best_practice".into(),
-            description: "Get Rust best practices and idiomatic patterns for a topic. Searches Rust Design Patterns and API Guidelines for recommendations on error handling, API design, naming conventions, and more.".into(),
-            input_schema: cached_schema_for_type::<GetBestPracticeParams>(),
-        }
-    }
-
-    async fn get_best_practice_tool_call(
-        context: ToolCallContext<'_, Self>,
+    #[tool(
+        name = "get_best_practice",
+        description = "Get Rust best practices and idiomatic patterns for a topic. Searches Rust Design Patterns and API Guidelines for recommendations on error handling, API design, naming conventions, and more."
+    )]
+    async fn get_best_practice(
+        &self,
+        Parameters(params): Parameters<GetBestPracticeParams>,
     ) -> std::result::Result<CallToolResult, McpError> {
-        use rmcp::handler::server::tool::FromToolCallContextPart;
-        use rmcp::handler::server::tool::Parameters;
-        use rmcp::model::Content;
-
-        let (callee, context) =
-            <&Self as FromToolCallContextPart<'_, Self>>::from_tool_call_context_part(context)?;
-        let (Parameters(params), _context) =
-            <Parameters<GetBestPracticeParams> as FromToolCallContextPart<'_, Self>>::from_tool_call_context_part(context)?;
-
         let limit = if params.limit == 0 { 5 } else { params.limit.min(15) };
 
         // Search in rust-patterns, api-guidelines, and rustonomicon
         let sources = ["rust-patterns", "api-guidelines", "rustonomicon"];
-        let hybrid = HybridSearch::new(&callee.keyword_index, &callee.vector_index);
+        let hybrid = HybridSearch::new(&self.keyword_index, &self.vector_index);
 
-        let results = if !callee.vector_index.is_empty() {
+        let results = if !self.vector_index.is_empty() {
             hybrid.search_with_sources(&params.topic, limit, Some(&sources))
         } else {
-            callee.keyword_index.search_with_sources(&params.topic, limit, Some(&sources))
+            self.keyword_index.search_with_sources(&params.topic, limit, Some(&sources))
         };
 
         match results {
@@ -360,38 +323,24 @@ impl RustDocServer {
         }
     }
 
-    // Tool definition for show_example
-    fn show_example_tool_attr() -> rmcp::model::Tool {
-        use rmcp::handler::server::tool::cached_schema_for_type;
-        rmcp::model::Tool {
-            name: "show_example".into(),
-            description: "Get code examples for a Rust topic. Searches Rust by Example for practical, runnable examples demonstrating iterators, pattern matching, closures, error handling, and more.".into(),
-            input_schema: cached_schema_for_type::<ShowExampleParams>(),
-        }
-    }
-
-    async fn show_example_tool_call(
-        context: ToolCallContext<'_, Self>,
+    #[tool(
+        name = "show_example",
+        description = "Get code examples for a Rust topic. Searches Rust by Example for practical, runnable examples demonstrating iterators, pattern matching, closures, error handling, and more."
+    )]
+    async fn show_example(
+        &self,
+        Parameters(params): Parameters<ShowExampleParams>,
     ) -> std::result::Result<CallToolResult, McpError> {
-        use rmcp::handler::server::tool::FromToolCallContextPart;
-        use rmcp::handler::server::tool::Parameters;
-        use rmcp::model::Content;
-
-        let (callee, context) =
-            <&Self as FromToolCallContextPart<'_, Self>>::from_tool_call_context_part(context)?;
-        let (Parameters(params), _context) =
-            <Parameters<ShowExampleParams> as FromToolCallContextPart<'_, Self>>::from_tool_call_context_part(context)?;
-
         let limit = if params.limit == 0 { 3 } else { params.limit.min(10) };
 
         // Search primarily in rust-by-example
         let sources = ["rust-by-example"];
-        let hybrid = HybridSearch::new(&callee.keyword_index, &callee.vector_index);
+        let hybrid = HybridSearch::new(&self.keyword_index, &self.vector_index);
 
-        let results = if !callee.vector_index.is_empty() {
+        let results = if !self.vector_index.is_empty() {
             hybrid.search_with_sources(&params.topic, limit, Some(&sources))
         } else {
-            callee.keyword_index.search_with_sources(&params.topic, limit, Some(&sources))
+            self.keyword_index.search_with_sources(&params.topic, limit, Some(&sources))
         };
 
         match results {
@@ -427,68 +376,15 @@ impl RustDocServer {
             ))])),
         }
     }
-
-    fn tool_box() -> &'static ToolBox<Self> {
-        use std::sync::OnceLock;
-        static TOOL_BOX: OnceLock<ToolBox<RustDocServer>> = OnceLock::new();
-        TOOL_BOX.get_or_init(|| {
-            let mut tool_box = ToolBox::new();
-            tool_box.add(ToolBoxItem::new(
-                Self::search_rust_docs_tool_attr(),
-                |context| Box::pin(Self::search_rust_docs_tool_call(context)),
-            ));
-            tool_box.add(ToolBoxItem::new(
-                Self::explain_concept_tool_attr(),
-                |context| Box::pin(Self::explain_concept_tool_call(context)),
-            ));
-            tool_box.add(ToolBoxItem::new(
-                Self::get_best_practice_tool_attr(),
-                |context| Box::pin(Self::get_best_practice_tool_call(context)),
-            ));
-            tool_box.add(ToolBoxItem::new(
-                Self::show_example_tool_attr(),
-                |context| Box::pin(Self::show_example_tool_call(context)),
-            ));
-            tool_box
-        })
-    }
 }
 
+#[tool_handler(router = self.tool_router)]
 impl ServerHandler for RustDocServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo {
-            protocol_version: Default::default(),
-            capabilities: ServerCapabilities {
-                tools: Some(ToolsCapability {
-                    list_changed: None,
-                }),
-                ..Default::default()
-            },
-            server_info: Implementation {
-                name: "rust-lang-mcp".to_string(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-            },
-            instructions: None,
+            instructions: Some("Rust documentation search server providing access to The Rust Book, Rust Reference, Rust by Example, Design Patterns, API Guidelines, and Rustonomicon.".into()),
+            capabilities: ServerCapabilities::builder().enable_tools().build(),
+            ..Default::default()
         }
-    }
-
-    async fn list_tools(
-        &self,
-        _request: PaginatedRequestParam,
-        _context: RequestContext<RoleServer>,
-    ) -> std::result::Result<ListToolsResult, McpError> {
-        Ok(ListToolsResult {
-            next_cursor: None,
-            tools: Self::tool_box().list(),
-        })
-    }
-
-    async fn call_tool(
-        &self,
-        request: CallToolRequestParam,
-        context: RequestContext<RoleServer>,
-    ) -> std::result::Result<CallToolResult, McpError> {
-        let tool_context = ToolCallContext::new(self, request, context);
-        Self::tool_box().call(tool_context).await
     }
 }

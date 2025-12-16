@@ -261,6 +261,31 @@ RUST_LOG=info cargo run --release
 cargo build
 ```
 
+## Troubleshooting
+
+### Search returns no results or errors
+
+If the search index becomes corrupted or out of sync, you can rebuild it:
+
+```bash
+# Delete the index (keeps documentation sources)
+rm -rf data/index
+
+# Restart the server to trigger re-indexing
+./target/release/rust-lang-mcp
+```
+
+The server will automatically rebuild the index on startup if it's empty or missing.
+
+### MCP connection issues
+
+If Claude Code or other clients can't connect to the server:
+
+1. Verify the path in your MCP config is absolute and correct
+2. Check that the binary exists: `ls -la /path/to/rust-lang-mcp/target/release/rust-lang-mcp`
+3. Test the server manually: `RUST_LOG=info /path/to/rust-lang-mcp/target/release/rust-lang-mcp`
+4. Check Claude Code's MCP status with the `/mcp` command
+
 ## License
 
 MIT
