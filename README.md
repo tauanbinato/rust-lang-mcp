@@ -54,7 +54,7 @@ Add to `~/.config/claude/claude_desktop_config.json` (Linux) or `~/Library/Appli
 ```json
 {
   "mcpServers": {
-    "rust-docs": {
+    "rust-lang-mcp": {
       "command": "/absolute/path/to/rust-lang-mcp/target/release/rust-lang-mcp"
     }
   }
@@ -70,7 +70,7 @@ Add to `~/.claude.json` to make the MCP available in all projects:
 ```json
 {
   "mcpServers": {
-    "rust-docs": {
+    "rust-lang-mcp": {
       "command": "/absolute/path/to/rust-lang-mcp/target/release/rust-lang-mcp"
     }
   }
@@ -106,7 +106,7 @@ Add to Cursor's MCP settings:
 ```json
 {
   "mcpServers": {
-    "rust-docs": {
+    "rust-lang-mcp": {
       "command": "/absolute/path/to/rust-lang-mcp/target/release/rust-lang-mcp"
     }
   }
