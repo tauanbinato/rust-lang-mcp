@@ -15,6 +15,7 @@ use crate::error::Result;
 use crate::indexer;
 use crate::search::embeddings::init_embedding_model;
 use crate::search::{HybridSearch, SearchIndex, SearchMode, VectorIndex};
+use crate::sources::clone_all_sources;
 
 /// Parameters for the search_rust_docs tool
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -51,14 +52,27 @@ impl RustDocServer {
 
         // Index documents if the keyword index is empty
         if keyword_index.is_empty()? {
-            tracing::info!("Index is empty, indexing available documentation sources...");
+            tracing::info!("Index is empty, checking for documentation sources...");
+
+            // Auto-clone documentation sources if they don't exist
+            match clone_all_sources(&data_dir) {
+                Ok(cloned) if cloned > 0 => {
+                    tracing::info!("Cloned {} documentation sources", cloned);
+                }
+                Ok(_) => {
+                    tracing::debug!("All documentation sources already present");
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to clone some sources: {}", e);
+                }
+            }
 
             // Use keyword-only indexing for now (embeddings will be generated on first semantic query)
             let count = indexer::index_all_sources(&keyword_index, &data_dir)?;
             if count > 0 {
                 tracing::info!("Keyword indexing complete: {} documents indexed", count);
             } else {
-                tracing::warn!("No documentation sources found. See README.md for setup instructions.");
+                tracing::warn!("No documentation sources found. Check network connection and try again.");
             }
         }
 

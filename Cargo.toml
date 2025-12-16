@@ -22,6 +22,9 @@ hnsw_rs = "0.3"
 # HTTP client for model download
 ureq = "2"
 
+# Git operations for auto-cloning docs
+git2 = "0.19"
+
 # Markdown parsing
 pulldown-cmark = "0.12"
 

@@ -1,5 +1,9 @@
 use std::path::{Path, PathBuf};
 
+use git2::{FetchOptions, RemoteCallbacks, Repository};
+
+use crate::error::{Error, Result};
+
 /// Configuration for a documentation source
 #[derive(Debug, Clone)]
 pub struct DocSource {
@@ -73,4 +77,72 @@ pub const DOC_SOURCES: &[DocSource] = &[
 /// Get a documentation source by ID
 pub fn get_source(id: &str) -> Option<&'static DocSource> {
     DOC_SOURCES.iter().find(|s| s.id == id)
+}
+
+/// Clone all documentation sources that don't already exist
+pub fn clone_all_sources(data_dir: &Path) -> Result<usize> {
+    std::fs::create_dir_all(data_dir)?;
+
+    let mut cloned = 0;
+
+    for source in DOC_SOURCES {
+        let target_dir = data_dir.join(source.dir_name());
+
+        if target_dir.exists() {
+            tracing::debug!("Source {} already exists at {:?}", source.id, target_dir);
+            continue;
+        }
+
+        tracing::info!("Cloning {} from {}...", source.name, source.clone_url());
+
+        match clone_repo(&source.clone_url(), &target_dir) {
+            Ok(()) => {
+                tracing::info!("Successfully cloned {}", source.name);
+                cloned += 1;
+            }
+            Err(e) => {
+                tracing::warn!("Failed to clone {}: {}", source.name, e);
+            }
+        }
+    }
+
+    Ok(cloned)
+}
+
+/// Clone a single git repository with shallow clone (depth 1)
+fn clone_repo(url: &str, target: &Path) -> Result<()> {
+    // Set up callbacks for progress reporting
+    let mut callbacks = RemoteCallbacks::new();
+    callbacks.transfer_progress(|progress| {
+        if progress.received_objects() == progress.total_objects() {
+            tracing::debug!(
+                "Resolving deltas {}/{}",
+                progress.indexed_deltas(),
+                progress.total_deltas()
+            );
+        } else {
+            tracing::debug!(
+                "Received {}/{} objects ({} bytes)",
+                progress.received_objects(),
+                progress.total_objects(),
+                progress.received_bytes()
+            );
+        }
+        true
+    });
+
+    // Set up fetch options with depth 1 (shallow clone)
+    let mut fetch_options = FetchOptions::new();
+    fetch_options.remote_callbacks(callbacks);
+    fetch_options.depth(1);
+
+    // Build the clone
+    let mut builder = git2::build::RepoBuilder::new();
+    builder.fetch_options(fetch_options);
+
+    builder
+        .clone(url, target)
+        .map_err(|e| Error::Other(format!("Git clone failed: {}", e)))?;
+
+    Ok(())
 }
