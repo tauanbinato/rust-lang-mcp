@@ -83,6 +83,16 @@ impl SearchIndex {
 
     /// Search the index and return top results
     pub fn search(&self, query_str: &str, limit: usize) -> Result<Vec<SearchResult>> {
+        self.search_with_sources(query_str, limit, None)
+    }
+
+    /// Search the index with optional source filtering
+    pub fn search_with_sources(
+        &self,
+        query_str: &str,
+        limit: usize,
+        sources: Option<&[&str]>,
+    ) -> Result<Vec<SearchResult>> {
         let reader = self.index.reader()?;
         let searcher = reader.searcher();
 
@@ -92,9 +102,37 @@ impl SearchIndex {
         let source_field = self.schema.get_field("source").unwrap();
 
         let query_parser = QueryParser::for_index(&self.index, vec![title_field, content_field]);
-        let query = query_parser.parse_query(query_str)?;
+        let base_query = query_parser.parse_query(query_str)?;
 
-        let top_docs = searcher.search(&query, &TopDocs::with_limit(limit))?;
+        // If sources specified, combine with source filter
+        let query: Box<dyn tantivy::query::Query> = if let Some(sources) = sources {
+            use tantivy::query::{BooleanQuery, Occur, TermQuery};
+            use tantivy::schema::IndexRecordOption;
+            use tantivy::Term;
+
+            // Create OR query for sources
+            let source_queries: Vec<(Occur, Box<dyn tantivy::query::Query>)> = sources
+                .iter()
+                .map(|s| {
+                    let term = Term::from_field_text(source_field, s);
+                    let term_query: Box<dyn tantivy::query::Query> =
+                        Box::new(TermQuery::new(term, IndexRecordOption::Basic));
+                    (Occur::Should, term_query)
+                })
+                .collect();
+
+            let source_filter = BooleanQuery::new(source_queries);
+
+            // Combine: must match query AND must match one of the sources
+            Box::new(BooleanQuery::new(vec![
+                (Occur::Must, base_query),
+                (Occur::Must, Box::new(source_filter)),
+            ]))
+        } else {
+            base_query
+        };
+
+        let top_docs = searcher.search(&*query, &TopDocs::with_limit(limit))?;
 
         let mut results = Vec::new();
         for (score, doc_address) in top_docs {

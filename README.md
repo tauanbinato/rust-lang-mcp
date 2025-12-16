@@ -157,6 +157,66 @@ Search the indexed Rust documentation for concepts, syntax, and best practices.
 ]
 ```
 
+### explain_concept
+
+Get detailed explanations of Rust concepts from The Rust Book and Rust Reference.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `concept` | string | Yes | - | The Rust concept to explain (e.g., "ownership", "lifetimes", "traits") |
+| `limit` | number | No | 3 | Maximum documentation sections to return (max: 10) |
+
+**Example:**
+
+```json
+{
+  "concept": "ownership",
+  "limit": 3
+}
+```
+
+### get_best_practice
+
+Get Rust best practices and idiomatic patterns from Design Patterns and API Guidelines.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `topic` | string | Yes | - | The topic to get best practices for (e.g., "error handling", "API design") |
+| `limit` | number | No | 5 | Maximum results to return (max: 15) |
+
+**Example:**
+
+```json
+{
+  "topic": "error handling",
+  "limit": 5
+}
+```
+
+### show_example
+
+Get code examples from Rust by Example for practical demonstrations.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `topic` | string | Yes | - | The topic to show examples for (e.g., "iterators", "closures", "match") |
+| `limit` | number | No | 3 | Maximum examples to return (max: 10) |
+
+**Example:**
+
+```json
+{
+  "topic": "iterators",
+  "limit": 3
+}
+```
+
 ## Documentation Sources
 
 | Source | Repository | Description |

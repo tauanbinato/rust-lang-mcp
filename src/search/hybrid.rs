@@ -27,15 +27,37 @@ impl<'a> HybridSearch<'a> {
 
     /// Perform hybrid search combining keyword and semantic results
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<SearchResult>> {
+        self.search_with_sources(query, limit, None)
+    }
+
+    /// Perform hybrid search with optional source filtering
+    pub fn search_with_sources(
+        &self,
+        query: &str,
+        limit: usize,
+        sources: Option<&[&str]>,
+    ) -> Result<Vec<SearchResult>> {
         // Get more results from each method to ensure good coverage after fusion
         let expanded_limit = limit * 3;
 
-        // Run keyword search
-        let keyword_results = self.keyword_index.search(query, expanded_limit)?;
+        // Run keyword search (with source filtering)
+        let keyword_results =
+            self.keyword_index
+                .search_with_sources(query, expanded_limit, sources)?;
 
         // Run semantic search
         let query_embedding = embed_text(query)?;
-        let semantic_results = self.vector_index.search(&query_embedding, expanded_limit);
+        let mut semantic_results = self.vector_index.search(&query_embedding, expanded_limit);
+
+        // Filter semantic results by source if specified
+        if let Some(sources) = sources {
+            semantic_results.retain(|(path, _)| {
+                // Look up the source for this path from keyword results
+                keyword_results
+                    .iter()
+                    .any(|r| r.path == *path && sources.contains(&r.source.as_str()))
+            });
+        }
 
         // Fuse results using RRF
         let fused = self.rrf_fusion(&keyword_results, &semantic_results);
@@ -47,6 +69,17 @@ impl<'a> HybridSearch<'a> {
     /// Perform keyword-only search
     pub fn keyword_search(&self, query: &str, limit: usize) -> Result<Vec<SearchResult>> {
         self.keyword_index.search(query, limit)
+    }
+
+    /// Perform keyword-only search with source filtering
+    #[allow(dead_code)]
+    pub fn keyword_search_with_sources(
+        &self,
+        query: &str,
+        limit: usize,
+        sources: Option<&[&str]>,
+    ) -> Result<Vec<SearchResult>> {
+        self.keyword_index.search_with_sources(query, limit, sources)
     }
 
     /// Perform semantic-only search

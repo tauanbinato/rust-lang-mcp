@@ -30,8 +30,42 @@ pub struct SearchDocsParams {
     pub mode: Option<String>,
 }
 
+/// Parameters for the explain_concept tool
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ExplainConceptParams {
+    /// The Rust concept to explain (e.g., "ownership", "lifetimes", "traits", "borrowing")
+    pub concept: String,
+    /// Maximum number of documentation sections to return (default: 3)
+    #[serde(default = "default_explain_limit")]
+    pub limit: usize,
+}
+
+/// Parameters for the get_best_practice tool
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetBestPracticeParams {
+    /// The topic to get best practices for (e.g., "error handling", "API design", "naming")
+    pub topic: String,
+    /// Maximum number of results to return (default: 5)
+    #[serde(default = "default_limit")]
+    pub limit: usize,
+}
+
+/// Parameters for the show_example tool
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ShowExampleParams {
+    /// The topic to show examples for (e.g., "iterators", "pattern matching", "closures")
+    pub topic: String,
+    /// Maximum number of examples to return (default: 3)
+    #[serde(default = "default_explain_limit")]
+    pub limit: usize,
+}
+
 fn default_limit() -> usize {
     5
+}
+
+fn default_explain_limit() -> usize {
+    3
 }
 
 /// MCP Server for Rust documentation
@@ -190,6 +224,210 @@ impl RustDocServer {
         }
     }
 
+    // Tool definition for explain_concept
+    fn explain_concept_tool_attr() -> rmcp::model::Tool {
+        use rmcp::handler::server::tool::cached_schema_for_type;
+        rmcp::model::Tool {
+            name: "explain_concept".into(),
+            description: "Get a detailed explanation of a Rust concept. Searches The Rust Book and Rust Reference for comprehensive explanations of concepts like ownership, lifetimes, traits, borrowing, etc.".into(),
+            input_schema: cached_schema_for_type::<ExplainConceptParams>(),
+        }
+    }
+
+    async fn explain_concept_tool_call(
+        context: ToolCallContext<'_, Self>,
+    ) -> std::result::Result<CallToolResult, McpError> {
+        use rmcp::handler::server::tool::FromToolCallContextPart;
+        use rmcp::handler::server::tool::Parameters;
+        use rmcp::model::Content;
+
+        let (callee, context) =
+            <&Self as FromToolCallContextPart<'_, Self>>::from_tool_call_context_part(context)?;
+        let (Parameters(params), _context) =
+            <Parameters<ExplainConceptParams> as FromToolCallContextPart<'_, Self>>::from_tool_call_context_part(context)?;
+
+        let limit = if params.limit == 0 { 3 } else { params.limit.min(10) };
+
+        // Search primarily in rust-book and rust-reference
+        let sources = ["rust-book", "rust-reference"];
+        let hybrid = HybridSearch::new(&callee.keyword_index, &callee.vector_index);
+
+        let results = if !callee.vector_index.is_empty() {
+            hybrid.search_with_sources(&params.concept, limit, Some(&sources))
+        } else {
+            callee.keyword_index.search_with_sources(&params.concept, limit, Some(&sources))
+        };
+
+        match results {
+            Ok(results) => {
+                if results.is_empty() {
+                    return Ok(CallToolResult::success(vec![Content::text(format!(
+                        "No documentation found for concept '{}'. Try a different term or check spelling.",
+                        params.concept
+                    ))]));
+                }
+
+                let json_results: Vec<serde_json::Value> = results
+                    .into_iter()
+                    .map(|r| {
+                        serde_json::json!({
+                            "title": r.title,
+                            "explanation": r.snippet,
+                            "path": r.path,
+                            "source": r.source,
+                        })
+                    })
+                    .collect();
+
+                match serde_json::to_string_pretty(&json_results) {
+                    Ok(json) => Ok(CallToolResult::success(vec![Content::text(json)])),
+                    Err(e) => Ok(CallToolResult::error(vec![Content::text(format!(
+                        "Failed to serialize results: {}", e
+                    ))])),
+                }
+            }
+            Err(e) => Ok(CallToolResult::error(vec![Content::text(format!(
+                "Search failed: {}", e
+            ))])),
+        }
+    }
+
+    // Tool definition for get_best_practice
+    fn get_best_practice_tool_attr() -> rmcp::model::Tool {
+        use rmcp::handler::server::tool::cached_schema_for_type;
+        rmcp::model::Tool {
+            name: "get_best_practice".into(),
+            description: "Get Rust best practices and idiomatic patterns for a topic. Searches Rust Design Patterns and API Guidelines for recommendations on error handling, API design, naming conventions, and more.".into(),
+            input_schema: cached_schema_for_type::<GetBestPracticeParams>(),
+        }
+    }
+
+    async fn get_best_practice_tool_call(
+        context: ToolCallContext<'_, Self>,
+    ) -> std::result::Result<CallToolResult, McpError> {
+        use rmcp::handler::server::tool::FromToolCallContextPart;
+        use rmcp::handler::server::tool::Parameters;
+        use rmcp::model::Content;
+
+        let (callee, context) =
+            <&Self as FromToolCallContextPart<'_, Self>>::from_tool_call_context_part(context)?;
+        let (Parameters(params), _context) =
+            <Parameters<GetBestPracticeParams> as FromToolCallContextPart<'_, Self>>::from_tool_call_context_part(context)?;
+
+        let limit = if params.limit == 0 { 5 } else { params.limit.min(15) };
+
+        // Search in rust-patterns, api-guidelines, and rustonomicon
+        let sources = ["rust-patterns", "api-guidelines", "rustonomicon"];
+        let hybrid = HybridSearch::new(&callee.keyword_index, &callee.vector_index);
+
+        let results = if !callee.vector_index.is_empty() {
+            hybrid.search_with_sources(&params.topic, limit, Some(&sources))
+        } else {
+            callee.keyword_index.search_with_sources(&params.topic, limit, Some(&sources))
+        };
+
+        match results {
+            Ok(results) => {
+                if results.is_empty() {
+                    return Ok(CallToolResult::success(vec![Content::text(format!(
+                        "No best practices found for '{}'. Try searching for related topics like 'error handling', 'API design', or 'naming'.",
+                        params.topic
+                    ))]));
+                }
+
+                let json_results: Vec<serde_json::Value> = results
+                    .into_iter()
+                    .map(|r| {
+                        serde_json::json!({
+                            "title": r.title,
+                            "practice": r.snippet,
+                            "path": r.path,
+                            "source": r.source,
+                        })
+                    })
+                    .collect();
+
+                match serde_json::to_string_pretty(&json_results) {
+                    Ok(json) => Ok(CallToolResult::success(vec![Content::text(json)])),
+                    Err(e) => Ok(CallToolResult::error(vec![Content::text(format!(
+                        "Failed to serialize results: {}", e
+                    ))])),
+                }
+            }
+            Err(e) => Ok(CallToolResult::error(vec![Content::text(format!(
+                "Search failed: {}", e
+            ))])),
+        }
+    }
+
+    // Tool definition for show_example
+    fn show_example_tool_attr() -> rmcp::model::Tool {
+        use rmcp::handler::server::tool::cached_schema_for_type;
+        rmcp::model::Tool {
+            name: "show_example".into(),
+            description: "Get code examples for a Rust topic. Searches Rust by Example for practical, runnable examples demonstrating iterators, pattern matching, closures, error handling, and more.".into(),
+            input_schema: cached_schema_for_type::<ShowExampleParams>(),
+        }
+    }
+
+    async fn show_example_tool_call(
+        context: ToolCallContext<'_, Self>,
+    ) -> std::result::Result<CallToolResult, McpError> {
+        use rmcp::handler::server::tool::FromToolCallContextPart;
+        use rmcp::handler::server::tool::Parameters;
+        use rmcp::model::Content;
+
+        let (callee, context) =
+            <&Self as FromToolCallContextPart<'_, Self>>::from_tool_call_context_part(context)?;
+        let (Parameters(params), _context) =
+            <Parameters<ShowExampleParams> as FromToolCallContextPart<'_, Self>>::from_tool_call_context_part(context)?;
+
+        let limit = if params.limit == 0 { 3 } else { params.limit.min(10) };
+
+        // Search primarily in rust-by-example
+        let sources = ["rust-by-example"];
+        let hybrid = HybridSearch::new(&callee.keyword_index, &callee.vector_index);
+
+        let results = if !callee.vector_index.is_empty() {
+            hybrid.search_with_sources(&params.topic, limit, Some(&sources))
+        } else {
+            callee.keyword_index.search_with_sources(&params.topic, limit, Some(&sources))
+        };
+
+        match results {
+            Ok(results) => {
+                if results.is_empty() {
+                    return Ok(CallToolResult::success(vec![Content::text(format!(
+                        "No examples found for '{}'. Try topics like 'iterators', 'match', 'closures', or 'error handling'.",
+                        params.topic
+                    ))]));
+                }
+
+                let json_results: Vec<serde_json::Value> = results
+                    .into_iter()
+                    .map(|r| {
+                        serde_json::json!({
+                            "title": r.title,
+                            "example": r.snippet,
+                            "path": r.path,
+                            "source": r.source,
+                        })
+                    })
+                    .collect();
+
+                match serde_json::to_string_pretty(&json_results) {
+                    Ok(json) => Ok(CallToolResult::success(vec![Content::text(json)])),
+                    Err(e) => Ok(CallToolResult::error(vec![Content::text(format!(
+                        "Failed to serialize results: {}", e
+                    ))])),
+                }
+            }
+            Err(e) => Ok(CallToolResult::error(vec![Content::text(format!(
+                "Search failed: {}", e
+            ))])),
+        }
+    }
+
     fn tool_box() -> &'static ToolBox<Self> {
         use std::sync::OnceLock;
         static TOOL_BOX: OnceLock<ToolBox<RustDocServer>> = OnceLock::new();
@@ -198,6 +436,18 @@ impl RustDocServer {
             tool_box.add(ToolBoxItem::new(
                 Self::search_rust_docs_tool_attr(),
                 |context| Box::pin(Self::search_rust_docs_tool_call(context)),
+            ));
+            tool_box.add(ToolBoxItem::new(
+                Self::explain_concept_tool_attr(),
+                |context| Box::pin(Self::explain_concept_tool_call(context)),
+            ));
+            tool_box.add(ToolBoxItem::new(
+                Self::get_best_practice_tool_attr(),
+                |context| Box::pin(Self::get_best_practice_tool_call(context)),
+            ));
+            tool_box.add(ToolBoxItem::new(
+                Self::show_example_tool_attr(),
+                |context| Box::pin(Self::show_example_tool_call(context)),
             ));
             tool_box
         })
