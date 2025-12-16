@@ -31,8 +31,8 @@ command = ["cargo", "test", "--color", "always"]
 need_stdout = true
 
 [jobs.run]
-command = ["cargo", "run", "--release", "--color", "always"]
-need_stdout = true
+command = ["cargo", "build", "--release", "--color", "always"]
+need_stdout = false
 
 [jobs.doc]
 command = ["cargo", "doc", "--no-deps", "--color", "always"]
