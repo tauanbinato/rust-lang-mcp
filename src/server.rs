@@ -39,6 +39,7 @@ fn default_limit() -> usize {
 pub struct RustDocServer {
     keyword_index: Arc<SearchIndex>,
     vector_index: Arc<VectorIndex>,
+    #[allow(dead_code)]
     data_dir: PathBuf,
 }
 

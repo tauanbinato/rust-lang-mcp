@@ -23,6 +23,7 @@ pub fn index_all_sources(index: &SearchIndex, data_dir: &Path) -> Result<usize> 
 }
 
 /// Index all sources with both keyword and vector indices (hybrid search)
+#[allow(dead_code)]
 pub fn index_all_sources_hybrid(
     keyword_index: &SearchIndex,
     vector_index: &mut VectorIndex,
@@ -116,6 +117,7 @@ fn collect_all_documents(data_dir: &Path) -> Result<Vec<Document>> {
 }
 
 /// Index a single documentation source
+#[allow(dead_code)]
 pub fn index_source(index: &SearchIndex, data_dir: &Path, source: &DocSource) -> Result<usize> {
     let docs_path = source.docs_path(data_dir);
     let documents = collect_documents(&docs_path, source.id)?;
@@ -142,7 +144,7 @@ fn collect_documents(dir: &Path, source: &str) -> Result<Vec<Document>> {
 
     for entry in walkdir(dir)? {
         let path = entry;
-        if path.extension().map_or(false, |ext| ext == "md") {
+        if path.extension().is_some_and(|ext| ext == "md") {
             match parse_markdown_file(&path, source) {
                 Ok(doc) => documents.push(doc),
                 Err(e) => {

@@ -60,15 +60,14 @@ impl<'a> HybridSearch<'a> {
         let mut search_results = Vec::new();
         for (path, score) in results {
             // Try to find matching document in keyword search for full info
-            if let Ok(keyword_results) = self.keyword_index.search(&path, 1) {
-                if let Some(result) = keyword_results.into_iter().next() {
+            if let Ok(keyword_results) = self.keyword_index.search(&path, 1)
+                && let Some(result) = keyword_results.into_iter().next() {
                     search_results.push(SearchResult {
                         score,
                         ..result
                     });
                     continue;
                 }
-            }
             // Fallback: create minimal result
             search_results.push(SearchResult {
                 title: path.clone(),
@@ -112,26 +111,26 @@ impl<'a> HybridSearch<'a> {
         // Build final results
         let mut results: Vec<SearchResult> = scores
             .into_iter()
-            .filter_map(|(path, (rrf_score, maybe_result))| {
+            .map(|(path, (rrf_score, maybe_result))| {
                 if let Some(mut result) = maybe_result {
                     result.score = rrf_score;
-                    Some(result)
+                    result
                 } else {
                     // We have a semantic-only result, try to get full info
-                    if let Ok(keyword_results) = self.keyword_index.search(&path, 1) {
-                        if let Some(mut result) = keyword_results.into_iter().next() {
-                            result.score = rrf_score;
-                            return Some(result);
-                        }
+                    if let Ok(keyword_results) = self.keyword_index.search(&path, 1)
+                        && let Some(mut result) = keyword_results.into_iter().next()
+                    {
+                        result.score = rrf_score;
+                        return result;
                     }
                     // Fallback
-                    Some(SearchResult {
+                    SearchResult {
                         title: path.clone(),
                         snippet: String::new(),
                         path,
                         source: String::new(),
                         score: rrf_score,
-                    })
+                    }
                 }
             })
             .collect();

@@ -172,18 +172,16 @@ impl SearchIndex {
             .collect();
 
         // Clean up snippet boundaries
-        if start > 0 {
-            if let Some(space_pos) = snippet.find(' ') {
+        if start > 0
+            && let Some(space_pos) = snippet.find(' ') {
                 snippet = snippet[space_pos + 1..].to_string();
                 snippet.insert_str(0, "...");
             }
-        }
-        if end < content.len() {
-            if let Some(space_pos) = snippet.rfind(' ') {
+        if end < content.len()
+            && let Some(space_pos) = snippet.rfind(' ') {
                 snippet.truncate(space_pos);
                 snippet.push_str("...");
             }
-        }
 
         snippet
     }

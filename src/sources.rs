@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use git2::{FetchOptions, RemoteCallbacks, Repository};
+use git2::{FetchOptions, RemoteCallbacks};
 
 use crate::error::{Error, Result};
 
@@ -20,7 +20,7 @@ pub struct DocSource {
 impl DocSource {
     /// Get the local directory name for this source
     pub fn dir_name(&self) -> &str {
-        self.repo.split('/').last().unwrap_or(self.id)
+        self.repo.split('/').next_back().unwrap_or(self.id)
     }
 
     /// Get the full path to the source files given a data directory
@@ -75,6 +75,7 @@ pub const DOC_SOURCES: &[DocSource] = &[
 ];
 
 /// Get a documentation source by ID
+#[allow(dead_code)]
 pub fn get_source(id: &str) -> Option<&'static DocSource> {
     DOC_SOURCES.iter().find(|s| s.id == id)
 }

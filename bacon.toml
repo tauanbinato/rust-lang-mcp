@@ -1,0 +1,44 @@
+# bacon configuration
+# https://dystroy.org/bacon/
+
+default_job = "check"
+
+[keybindings]
+r = "job:run"
+t = "job:test"
+c = "job:clippy"
+f = "job:clippy-fix"
+
+[jobs.check]
+command = ["cargo", "check", "--color", "always"]
+need_stdout = false
+
+[jobs.check-all]
+command = ["cargo", "check", "--all-targets", "--color", "always"]
+need_stdout = false
+
+[jobs.clippy]
+command = ["cargo", "clippy", "--all-targets", "--color", "always"]
+need_stdout = false
+
+[jobs.clippy-fix]
+command = ["cargo", "clippy", "--all-targets", "--fix", "--allow-dirty", "--allow-staged", "--color", "always"]
+need_stdout = true
+on_success = "back"
+
+[jobs.test]
+command = ["cargo", "test", "--color", "always"]
+need_stdout = true
+
+[jobs.run]
+command = ["cargo", "run", "--release", "--color", "always"]
+need_stdout = true
+
+[jobs.doc]
+command = ["cargo", "doc", "--no-deps", "--color", "always"]
+need_stdout = false
+
+[jobs.doc-open]
+command = ["cargo", "doc", "--no-deps", "--open", "--color", "always"]
+need_stdout = false
+on_success = "back"

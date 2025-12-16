@@ -2,6 +2,8 @@
 //!
 //! Uses all-MiniLM-L6-v2 model for generating 384-dimensional embeddings.
 
+#![allow(dead_code)]
+
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -176,8 +178,7 @@ impl EmbeddingModel {
 
         let mut embeddings = Vec::with_capacity(batch_size);
 
-        for batch_idx in 0..batch_size {
-            let encoding = &encodings[batch_idx];
+        for (batch_idx, encoding) in encodings.iter().enumerate() {
             let seq_len = encoding.get_ids().len().min(MAX_SEQ_LENGTH).min(seq_len_dim);
 
             // Mean pooling over non-padding tokens

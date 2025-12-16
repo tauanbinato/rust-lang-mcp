@@ -1,5 +1,7 @@
 //! Vector index for semantic search using HNSW (Hierarchical Navigable Small World).
 
+#![allow(dead_code)]
+
 use std::path::Path;
 
 use hnsw_rs::hnsw::Hnsw;
