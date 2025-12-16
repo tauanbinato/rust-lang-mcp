@@ -63,7 +63,9 @@ Add to `~/.config/claude/claude_desktop_config.json` (Linux) or `~/Library/Appli
 
 ### Claude Code (CLI)
 
-Add to `~/.claude/settings.json`:
+#### Global configuration (recommended)
+
+Add to `~/.claude/settings.json` to make the MCP available in all projects:
 
 ```json
 {
@@ -74,6 +76,24 @@ Add to `~/.claude/settings.json`:
   }
 }
 ```
+
+#### Project-level configuration
+
+For development or project-specific setup, create a `.mcp.json` file in the project root:
+
+```json
+{
+  "mcpServers": {
+    "rust-lang-mcp": {
+      "command": "cargo",
+      "args": ["run", "--release"],
+      "cwd": "/absolute/path/to/rust-lang-mcp"
+    }
+  }
+}
+```
+
+This runs the MCP server directly from source, useful during development.
 
 ### Cursor
 
